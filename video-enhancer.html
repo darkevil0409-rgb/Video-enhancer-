@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RESOLVE — Video Enhancer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg: #0b0e12;
+    --panel: #12161c;
+    --panel-2: #171c24;
+    --line: #232a34;
+    --text: #dfe6ee;
+    --dim: #7c8a9a;
+    --cyan: #4fd8e0;
+    --amber: #e0a04f;
+    --mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+    --sans: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);}
+  ::selection{background:var(--cyan);color:#04191a;}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:36px 24px 80px;}
+
+  header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:28px;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan);}
+  .brand h1{font-family:var(--mono);font-size:15px;letter-spacing:.24em;font-weight:600;margin:0;text-transform:uppercase;}
+  header .meta{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.05em;text-align:right;line-height:1.6;}
+
+  .drop{
+    border:1px dashed var(--line);
+    border-radius:2px;
+    background:var(--panel);
+    padding:56px 24px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+    position:relative;
+  }
+  .drop:hover, .drop.drag{border-color:var(--cyan); background:#101821;}
+  .drop .icon{font-family:var(--mono);font-size:11px;letter-spacing:.2em;color:var(--dim);margin-bottom:10px;}
+  .drop h2{font-size:18px;margin:0 0 6px;font-weight:600;}
+  .drop p{color:var(--dim);font-size:13px;margin:0;}
+  input[type=file]{display:none;}
+
+  .studio{display:none;}
+  .studio.active{display:block;}
+
+  .scope-row{font-family:var(--mono);font-size:10px;letter-spacing:.15em;color:var(--dim);display:flex;justify-content:space-between;margin:28px 0 8px;text-transform:uppercase;}
+  .scope-row span.tag{color:var(--cyan);}
+
+  .preview{
+    position:relative;
+    width:100%;
+    aspect-ratio:16/9;
+    background:#000;
+    border:1px solid var(--line);
+    overflow:hidden;
+    border-radius:2px;
+  }
+  .preview canvas, .preview video{
+    position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:block;
+  }
+  #canvasAfter{clip-path: inset(0 0 0 50%);}
+  .divider{
+    position:absolute; top:0; bottom:0; left:50%;
+    width:2px; background:var(--cyan); box-shadow:0 0 10px var(--cyan);
+    transform:translateX(-1px); pointer-events:none; z-index:5;
+  }
+  .divider::after{
+    content:'';
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:34px; height:34px; border-radius:50%;
+    background:var(--cyan); box-shadow:0 0 0 6px rgba(79,216,224,.15);
+  }
+  .divider::before{
+    content:'◂ ▸';
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    font-size:10px; color:#04191a; z-index:6; font-family:var(--mono);
+    letter-spacing:2px;
+  }
+  .drag-handle{
+    position:absolute; top:0; bottom:0; left:50%; width:40px; transform:translateX(-20px);
+    cursor:ew-resize; z-index:6;
+  }
+  .side-label{
+    position:absolute; top:10px; font-family:var(--mono); font-size:10px; letter-spacing:.15em;
+    padding:4px 8px; background:rgba(0,0,0,.55); z-index:4; text-transform:uppercase;
+  }
+  .side-label.before{left:10px; color:var(--dim);}
+  .side-label.after{right:10px; color:var(--cyan);}
+
+  .controls{display:grid; grid-template-columns:1.1fr .9fr; gap:20px; margin-top:20px;}
+  @media(max-width:760px){.controls{grid-template-columns:1fr;}}
+
+  .panel{background:var(--panel); border:1px solid var(--line); padding:20px;}
+  .panel h3{font-family:var(--mono); font-size:11px; letter-spacing:.18em; color:var(--dim); text-transform:uppercase; margin:0 0 16px;}
+
+  .slider-row{margin-bottom:16px;}
+  .slider-row:last-child{margin-bottom:0;}
+  .slider-row label{display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:6px; color:var(--text);}
+  .slider-row label .val{font-family:var(--mono); color:var(--cyan);}
+  input[type=range]{
+    -webkit-appearance:none; width:100%; height:2px; background:var(--line); outline:none; margin:0;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:13px; height:13px; border-radius:50%;
+    background:var(--cyan); cursor:pointer; box-shadow:0 0 6px rgba(79,216,224,.6);
+    margin-top:-5.5px;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%; background:var(--cyan); border:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-runnable-track{height:2px; background:var(--line);}
+
+  .res-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:4px;}
+  .res-btn{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--dim);
+    font-family:var(--mono); font-size:11px; padding:12px 4px; text-align:center;
+    cursor:pointer; transition:all .12s ease; letter-spacing:.03em;
+  }
+  .res-btn .px{display:block; font-size:9px; color:var(--dim); margin-top:2px;}
+  .res-btn:hover{border-color:var(--cyan); color:var(--text);}
+  .res-btn.active{border-color:var(--cyan); color:var(--cyan); background:#0f1c1e;}
+  .res-btn.active .px{color:var(--cyan);}
+
+  .presets{display:flex; gap:8px; flex-wrap:wrap; margin-top:14px;}
+  .preset-chip{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.05em; padding:7px 11px;
+    border:1px solid var(--line); color:var(--dim); cursor:pointer; background:transparent;
+    transition:all .12s ease;
+  }
+  .preset-chip:hover{color:var(--text); border-color:#3a4553;}
+
+  .actions{display:flex; gap:10px; margin-top:24px; align-items:center;}
+  .btn{
+    font-family:var(--mono); font-size:12px; letter-spacing:.1em; text-transform:uppercase;
+    padding:13px 22px; border:1px solid var(--line); background:transparent; color:var(--text);
+    cursor:pointer; transition:all .12s ease;
+  }
+  .btn.primary{background:var(--cyan); color:#04191a; border-color:var(--cyan); font-weight:700;}
+  .btn.primary:hover{background:#6be2e8;}
+  .btn:not(.primary):hover{border-color:var(--dim);}
+  .btn:disabled{opacity:.4; cursor:not-allowed;}
+
+  .status{font-family:var(--mono); font-size:11px; color:var(--dim); margin-left:auto; letter-spacing:.05em;}
+  .status.active{color:var(--amber);}
+  .status.done{color:var(--cyan);}
+
+  .progress-bar{height:2px; background:var(--line); margin-top:14px; overflow:hidden; display:none;}
+  .progress-bar.show{display:block;}
+  .progress-bar .fill{height:100%; width:0%; background:var(--cyan); transition:width .1s linear;}
+
+  video#srcVideo{display:none;}
+
+  footer{margin-top:60px; border-top:1px solid var(--line); padding-top:18px; font-family:var(--mono); font-size:10px; color:var(--dim); letter-spacing:.05em; display:flex; justify-content:space-between;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="dot"></div>
+      <h1>Resolve / Enhancer</h1>
+    </div>
+    <div class="meta">Client-side render engine<br>No upload · processed on-device</div>
+  </header>
+
+  <div id="dropZone" class="drop">
+    <div class="icon">[ DROP FILE OR CLICK ]</div>
+    <h2>Load a video to begin</h2>
+    <p>MP4, WebM or MOV — enhancement runs entirely in your browser</p>
+    <input type="file" id="fileInput" accept="video/*">
+  </div>
+
+  <div id="studio" class="studio">
+
+    <video id="srcVideo" muted loop playsinline></video>
+
+    <div class="scope-row">
+      <span>Preview — drag divider to compare <span class="tag">BEFORE / AFTER</span></span>
+      <span id="dimsReadout">— × —</span>
+    </div>
+
+    <div class="preview" id="previewBox">
+      <canvas id="canvasBefore"></canvas>
+      <canvas id="canvasAfter"></canvas>
+      <div class="side-label before">Before</div>
+      <div class="side-label after">After</div>
+      <div class="divider" id="divider"></div>
+      <div class="drag-handle" id="dragHandle"></div>
+    </div>
+
+    <div class="controls">
+      <div class="panel">
+        <h3>Enhancement</h3>
+        <div class="slider-row">
+          <label>Sharpen <span class="val" id="vSharpen">55</span></label>
+          <input type="range" id="sharpen" min="0" max="100" value="55">
+        </div>
+        <div class="slider-row">
+          <label>Contrast <span class="val" id="vContrast">12</span></label>
+          <input type="range" id="contrast" min="-40" max="60" value="12">
+        </div>
+        <div class="slider-row">
+          <label>Saturation <span class="val" id="vSaturation">10</span></label>
+          <input type="range" id="saturation" min="-40" max="60" value="10">
+        </div>
+        <div class="slider-row">
+          <label>Brightness <span class="val" id="vBrightness">0</span></label>
+          <input type="range" id="brightness" min="-40" max="40" value="0">
+        </div>
+        <div class="slider-row">
+          <label>Denoise <span class="val" id="vDenoise">20</span></label>
+          <input type="range" id="denoise" min="0" max="100" value="20">
+        </div>
+        <div class="presets">
+          <button class="preset-chip" data-preset="natural">Natural</button>
+          <button class="preset-chip" data-preset="crisp">Crisp</button>
+          <button class="preset-chip" data-preset="cinematic">Cinematic</button>
+          <button class="preset-chip" data-preset="flat">Reset</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Output resolution</h3>
+        <div class="res-grid">
+          <div class="res-btn" data-w="1280" data-h="720">720p<span class="px">HD</span></div>
+          <div class="res-btn active" data-w="1920" data-h="1080">1080p<span class="px">Full HD</span></div>
+          <div class="res-btn" data-w="2560" data-h="1440">2K<span class="px">QHD</span></div>
+          <div class="res-btn" data-w="3840" data-h="2160">4K<span class="px">Ultra HD</span></div>
+        </div>
+        <h3 style="margin-top:20px;">Output format</h3>
+        <div class="res-grid" id="formatGrid" style="grid-template-columns:repeat(2,1fr);">
+          <div class="res-btn active" data-fmt="mp4">MP4<span class="px">H.264</span></div>
+          <div class="res-btn" data-fmt="webm">WebM<span class="px">VP9</span></div>
+        </div>
+        <div id="fmtNote" style="font-family:var(--mono); font-size:10px; color:var(--dim); margin-top:8px; line-height:1.5;"></div>
+        <div class="actions">
+          <button class="btn" id="playBtn">▶ Play preview</button>
+          <button class="btn primary" id="exportBtn">Export video</button>
+        </div>
+        <div class="progress-bar" id="progressBar"><div class="fill" id="progressFill"></div></div>
+        <div id="statusText" style="font-family:var(--mono); font-size:11px; color:var(--dim); margin-top:10px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <span>RESOLVE ENHANCER — v1.0</span>
+    <span id="engineTag">Canvas 2D + WebGL sharpen kernel</span>
+  </footer>
+</div>
+
+<script>
+(function(){
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const studio = document.getElementById('studio');
+  const srcVideo = document.getElementById('srcVideo');
+  const canvasBefore = document.getElementById('canvasBefore');
+  const canvasAfter = document.getElementById('canvasAfter');
+  const ctxBefore = canvasBefore.getContext('2d');
+  const ctxAfter = canvasAfter.getContext('2d', {willReadFrequently:true});
+  const previewBox = document.getElementById('previewBox');
+  const divider = document.getElementById('divider');
+  const dragHandle = document.getElementById('dragHandle');
+  const dimsReadout = document.getElementById('dimsReadout');
+  const playBtn = document.getElementById('playBtn');
+  const exportBtn = document.getElementById('exportBtn');
+  const progressBar = document.getElementById('progressBar');
+  const progressFill = document.getElementById('progressFill');
+  const statusText = document.getElementById('statusText');
+
+  let targetW = 1920, targetH = 1080;
+  let outputFormat = 'mp4';
+  let rafId = null;
+  let isPlaying = false;
+
+  // detect real MP4/H.264 recording support (Safari mainly; Chrome/Firefox will fall back)
+  const mp4MimeCandidates = [
+    'video/mp4;codecs=avc1.640028',
+    'video/mp4;codecs=h264',
+    'video/mp4'
+  ];
+  const supportedMp4Mime = mp4MimeCandidates.find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m));
+
+  function updateFormatNote(){
+    const note = document.getElementById('fmtNote');
+    if(outputFormat === 'mp4'){
+      if(supportedMp4Mime){
+        note.textContent = 'Native MP4 (H.264) recording available in this browser.';
+      } else {
+        note.textContent = 'This browser can\\'t record true MP4. Exporting as WebM instead (renaming a WebM file to .mp4 does not make it playable — the container format itself differs). Use Safari for native MP4, or convert the WebM afterward with a tool like HandBrake or ffmpeg.';
+      }
+    } else {
+      note.textContent = 'WebM (VP9) — supported natively in all major browsers.';
+    }
+  }
+
+  const params = {sharpen:55, contrast:12, saturation:10, brightness:0, denoise:20};
+  const sliders = ['sharpen','contrast','saturation','brightness','denoise'];
+  sliders.forEach(id=>{
+    const el = document.getElementById(id);
+    const label = document.getElementById('v'+id.charAt(0).toUpperCase()+id.slice(1));
+    el.addEventListener('input', ()=>{ params[id] = Number(el.value); label.textContent = el.value; });
+  });
+
+  const presets = {
+    natural:{sharpen:35, contrast:6, saturation:6, brightness:0, denoise:15},
+    crisp:{sharpen:75, contrast:18, saturation:10, brightness:0, denoise:10},
+    cinematic:{sharpen:40, contrast:22, saturation:-8, brightness:-4, denoise:20},
+    flat:{sharpen:0, contrast:0, saturation:0, brightness:0, denoise:0}
+  };
+  document.querySelectorAll('.preset-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      const p = presets[chip.dataset.preset];
+      Object.keys(p).forEach(k=>{
+        params[k]=p[k];
+        document.getElementById(k).value = p[k];
+        document.getElementById('v'+k.charAt(0).toUpperCase()+k.slice(1)).textContent = p[k];
+      });
+    });
+  });
+
+  document.querySelectorAll('#formatGrid + div, .res-grid').forEach(()=>{}); // no-op guard
+  document.querySelectorAll('.res-grid .res-btn').forEach(btn=>{
+    if(btn.dataset.w){
+      btn.addEventListener('click', ()=>{
+        document.querySelectorAll('.res-grid .res-btn[data-w]').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        targetW = Number(btn.dataset.w);
+        targetH = Number(btn.dataset.h);
+        dimsReadout.textContent = targetW+' × '+targetH;
+      });
+    }
+  });
+  document.querySelectorAll('#formatGrid .res-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('#formatGrid .res-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      outputFormat = btn.dataset.fmt;
+      updateFormatNote();
+    });
+  });
+  updateFormatNote();
+
+  // --- file loading ---
+  function loadFile(file){
+    if(!file || !file.type.startsWith('video/')) return;
+    const url = URL.createObjectURL(file);
+    srcVideo.src = url;
+    srcVideo.onloadedmetadata = ()=>{
+      studio.classList.add('active');
+      dropZone.style.display='none';
+      const ar = srcVideo.videoWidth / srcVideo.videoHeight;
+      previewBox.style.aspectRatio = ar;
+      dimsReadout.textContent = targetW+' × '+targetH;
+      srcVideo.currentTime = Math.min(1, srcVideo.duration/4);
+    };
+    srcVideo.onseeked = ()=>{ drawFrame(); };
+  }
+  fileInput.addEventListener('change', e=> loadFile(e.target.files[0]));
+  dropZone.addEventListener('click', ()=> fileInput.click());
+  ['dragenter','dragover'].forEach(ev=> dropZone.addEventListener(ev, e=>{e.preventDefault(); dropZone.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=> dropZone.addEventListener(ev, e=>{e.preventDefault(); dropZone.classList.remove('drag');}));
+  dropZone.addEventListener('drop', e=>{ loadFile(e.dataTransfer.files[0]); });
+
+  // --- divider drag ---
+  let dragging=false;
+  dragHandle.addEventListener('pointerdown', ()=>{dragging=true;});
+  window.addEventListener('pointerup', ()=>{dragging=false;});
+  window.addEventListener('pointermove', e=>{
+    if(!dragging) return;
+    const rect = previewBox.getBoundingClientRect();
+    let pct = ((e.clientX - rect.left)/rect.width)*100;
+    pct = Math.max(2, Math.min(98, pct));
+    divider.style.left = pct+'%';
+    dragHandle.style.left = pct+'%';
+    canvasAfter.style.clipPath = `inset(0 0 0 ${pct}%)`;
+  });
+
+  // --- render pipeline ---
+  function applyFilterString(){
+    const c = params.contrast, s = params.saturation, b = params.brightness;
+    return `contrast(${100+c}%) saturate(${100+s}%) brightness(${100+b}%)`;
+  }
+
+  // sharpen via convolution on a downscaled sample for perf, then let CSS-less canvas draw handle it directly on full frame with a lighter kernel
+  function sharpenCanvas(ctx, w, h, amount){
+    if(amount<=0) return;
+    const amt = amount/100 * 0.9; // strength
+    const imgData = ctx.getImageData(0,0,w,h);
+    const src = imgData.data;
+    const out = new Uint8ClampedArray(src);
+    const kCenter = 1 + 4*amt;
+    const kEdge = -amt;
+    for(let y=1; y<h-1; y++){
+      for(let x=1; x<w-1; x++){
+        const i = (y*w+x)*4;
+        for(let c=0;c<3;c++){
+          const iN = i - w*4 + c;
+          const iS = i + w*4 + c;
+          const iE = i + 4 + c;
+          const iW = i - 4 + c;
+          const val = src[i+c]*kCenter + kEdge*(src[iN]+src[iS]+src[iE]+src[iW]);
+          out[i+c] = val;
+        }
+      }
+    }
+    imgData.data.set(out);
+    ctx.putImageData(imgData, 0, 0);
+  }
+
+  function denoiseCanvas(ctx, w, h, amount){
+    if(amount<=0) return;
+    // light box blur mixed back proportionally to `amount` for a noise-reduction feel
+    const mix = (amount/100) * 0.5;
+    ctx.save();
+    ctx.globalAlpha = mix;
+    ctx.filter = 'blur(0.6px)';
+    ctx.drawImage(ctx.canvas, 0, 0);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  function drawFrame(){
+    if(srcVideo.videoWidth === 0) return;
+    // BEFORE — untouched, natural size mapping
+    canvasBefore.width = targetW; canvasBefore.height = targetH;
+    ctxBefore.filter = 'none';
+    ctxBefore.drawImage(srcVideo, 0, 0, targetW, targetH);
+
+    // AFTER — enhanced
+    canvasAfter.width = targetW; canvasAfter.height = targetH;
+    ctxAfter.filter = applyFilterString();
+    ctxAfter.drawImage(srcVideo, 0, 0, targetW, targetH);
+    ctxAfter.filter = 'none';
+    if(params.denoise>0) denoiseCanvas(ctxAfter, targetW, targetH, params.denoise);
+    if(params.sharpen>0) sharpenCanvas(ctxAfter, targetW, targetH, params.sharpen);
+  }
+
+  function loop(){
+    drawFrame();
+    if(isPlaying) rafId = requestAnimationFrame(loop);
+  }
+
+  playBtn.addEventListener('click', ()=>{
+    isPlaying = !isPlaying;
+    if(isPlaying){
+      srcVideo.play();
+      playBtn.textContent = '⏸ Pause preview';
+      loop();
+    } else {
+      srcVideo.pause();
+      playBtn.textContent = '▶ Play preview';
+      cancelAnimationFrame(rafId);
+    }
+  });
+
+  // redraw static frame whenever sliders/resolution change while paused
+  sliders.forEach(id=> document.getElementById(id).addEventListener('input', ()=>{ if(!isPlaying) drawFrame(); }));
+  document.querySelectorAll('.preset-chip').forEach(chip=> chip.addEventListener('click', ()=>{ if(!isPlaying) drawFrame(); }));
+  document.querySelectorAll('.res-btn').forEach(btn=> btn.addEventListener('click', ()=>{ if(!isPlaying) drawFrame(); else {} }));
+
+  // --- export ---
+  exportBtn.addEventListener('click', async ()=>{
+    if(!srcVideo.src){ return; }
+    exportBtn.disabled = true;
+    statusText.textContent = 'Rendering… keep this tab open';
+    statusText.className = 'active';
+    progressBar.classList.add('show');
+    progressFill.style.width = '0%';
+
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = targetW; exportCanvas.height = targetH;
+    const ex = exportCanvas.getContext('2d', {willReadFrequently:true});
+
+    const stream = exportCanvas.captureStream(30);
+    let mime, fileExt, actualFormat;
+    if(outputFormat === 'mp4' && supportedMp4Mime){
+      mime = supportedMp4Mime; fileExt = 'mp4'; actualFormat = 'mp4';
+    } else {
+      mime = 'video/webm;codecs=vp9';
+      if(!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm;codecs=vp8';
+      if(!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm';
+      fileExt = 'webm'; actualFormat = 'webm';
+    }
+    const recorder = new MediaRecorder(stream, {mimeType:mime, videoBitsPerSecond: Math.min(40_000_000, targetW*targetH*8)});
+    const chunks = [];
+    recorder.ondataavailable = e=>{ if(e.data.size>0) chunks.push(e.data); };
+
+    const wasPlaying = isPlaying;
+    isPlaying = false;
+    cancelAnimationFrame(rafId);
+    srcVideo.pause();
+    srcVideo.currentTime = 0;
+    await new Promise(r=> srcVideo.onseeked = r);
+
+    recorder.start();
+
+    await new Promise((resolve)=>{
+      function renderTick(){
+        if(srcVideo.ended || srcVideo.currentTime >= srcVideo.duration - 0.05){
+          resolve();
+          return;
+        }
+        ex.filter = applyFilterString();
+        ex.drawImage(srcVideo, 0, 0, targetW, targetH);
+        ex.filter = 'none';
+        if(params.denoise>0) denoiseCanvas(ex, targetW, targetH, params.denoise);
+        if(params.sharpen>0) sharpenCanvas(ex, targetW, targetH, params.sharpen);
+        const pct = Math.min(100, (srcVideo.currentTime / srcVideo.duration)*100);
+        progressFill.style.width = pct+'%';
+        requestAnimationFrame(renderTick);
+      }
+      srcVideo.play();
+      srcVideo.onplaying = ()=> requestAnimationFrame(renderTick);
+    });
+
+    srcVideo.pause();
+    recorder.stop();
+
+    recorder.onstop = ()=>{
+      const blob = new Blob(chunks, {type: mime.split(';')[0]});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `enhanced_${targetW}x${targetH}.${fileExt}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      const formatNote = (outputFormat === 'mp4' && actualFormat === 'webm') ? ' (MP4 unsupported here — saved as WebM instead)' : '';
+      statusText.textContent = 'Done — file downloaded (' + (blob.size/1024/1024).toFixed(1) + ' MB)' + formatNote;
+      statusText.className = 'done';
+      progressFill.style.width = '100%';
+      exportBtn.disabled = false;
+      isPlaying = wasPlaying;
+    };
+  });
+
+})();
+</script>
+</body>
+</html>
